@@ -1,10 +1,13 @@
 import { useRef, useCallback } from 'react';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { Button, Box } from '@mui/material';
-import { Add, Remove } from '@mui/icons-material';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import { useControlTempStore } from './controlTempStore.tsx';
 import { useAppStore } from '@state/appStore.tsx';
 import { postDeviceStatus } from '@api/deviceStatus.ts';
+import { invalidateAutopilotStatus } from '@api/autopilot.ts';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSettings } from '@api/settings.ts';
 import { MIN_TEMP_F, MAX_TEMP_F } from '@lib/temperatureConversions.ts';
 
@@ -18,6 +21,7 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
   const { side, setIsUpdating, isUpdating } = useAppStore();
   const { deviceStatus, setDeviceStatus } = useControlTempStore();
   const { data: settings } = useSettings();
+  const queryClient = useQueryClient();
   const theme = useTheme();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -28,13 +32,13 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
         [side]: { targetTemperatureF: deviceStatus?.[side]?.targetTemperatureF },
       });
       await new Promise(r => setTimeout(r, 1_500));
-      await refetch?.();
+      await Promise.all([refetch?.(), invalidateAutopilotStatus(queryClient)]);
     } catch (err) {
       console.error(err);
     } finally {
       setIsUpdating(false);
     }
-  }, [deviceStatus, side, refetch, setIsUpdating]);
+  }, [deviceStatus, side, refetch, setIsUpdating, queryClient]);
 
   const scheduleUpdate = useCallback(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -46,7 +50,6 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
   if (isInAwayMode) return null;
 
   const disabled = isUpdating || isInAwayMode;
-  const borderColor = theme.palette.divider;
   const iconColor = theme.palette.text.primary;
 
   const handleClick = (change: number) => {
@@ -62,24 +65,25 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
   };
 
   const buttonStyle = {
-    borderWidth: '1px',
-    borderColor,
-    width: 48,
-    height: 48,
-    borderRadius: '50%',
+    width: 56,
+    height: 56,
     minWidth: 0,
     padding: 0,
+    borderRadius: '50%',
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.06 : 0.04),
+    '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.14), borderColor: alpha(theme.palette.primary.main, 0.4) },
   };
 
   return (
     <Box
       sx={ {
-        top: '78%',
+        top: '76%',
         position: 'absolute',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '88px',
+        gap: '96px',
         width: '100%',
         marginLeft: 'auto',
         marginRight: 'auto',
@@ -93,7 +97,7 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
         onClick={ () => handleClick(-1) }
         disabled={ disabled || currentTargetTemp <= MIN_TEMP_F }
       >
-        <Remove sx={ { color: iconColor } }/>
+        <RemoveRoundedIcon sx={ { color: iconColor, fontSize: 26 } }/>
       </Button>
       <Button
         variant="outlined"
@@ -103,7 +107,7 @@ export default function TemperatureButtons({ refetch, currentTargetTemp }: Tempe
         onClick={ () => handleClick(1) }
         disabled={ disabled || currentTargetTemp >= MAX_TEMP_F }
       >
-        <Add sx={ { color: iconColor } }/>
+        <AddRoundedIcon sx={ { color: iconColor, fontSize: 26 } }/>
       </Button>
     </Box>
   );

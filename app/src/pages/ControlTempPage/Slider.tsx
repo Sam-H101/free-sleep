@@ -1,11 +1,13 @@
 import { CircularSliderWithChildren } from 'react-circular-slider-svg';
 import { postDeviceStatus } from '@api/deviceStatus.ts';
+import { invalidateAutopilotStatus } from '@api/autopilot.ts';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@state/appStore';
 import styles from './Slider.module.scss';
 import TemperatureLabel from './TemperatureLabel.tsx';
 import TemperatureButtons from './TemperatureButtons.tsx';
 import { useControlTempStore } from './controlTempStore.tsx';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useResizeDetector } from 'react-resize-detector';
 import { useSettings } from '@api/settings.ts';
 import { MAX_TEMP_F, MIN_TEMP_F, getTemperatureColor } from '@lib/temperatureConversions.ts';
@@ -22,6 +24,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
   const { deviceStatus, setDeviceStatus } = useControlTempStore();
   const { isUpdating, setIsUpdating, side } = useAppStore();
   const { data: settings } = useSettings();
+  const queryClient = useQueryClient();
   const isInAwayMode = settings?.[side]?.awayMode;
   const disabled = isUpdating || isInAwayMode || !isOn;
   const { width, ref } = useResizeDetector();
@@ -40,7 +43,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
         // Wait 1 second before refreshing the device status
         return new Promise((resolve) => setTimeout(resolve, 1_500));
       })
-      .then(() => refetch())
+      .then(() => Promise.all([refetch(), invalidateAutopilotStatus(queryClient)]))
       .catch(error => {
         console.error(error);
       })
@@ -49,7 +52,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
       });
   };
 
-  const arcBackgroundColor = theme.palette.divider;
+  const arcBackgroundColor = alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.08 : 0.1);
 
   const sideStatus = deviceStatus?.[side];
   const minTemp = Math.min(sideStatus?.currentTemperatureF || 55, sideStatus?.targetTemperatureF || 55);
@@ -59,7 +62,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
   return (
     <div
       ref={ ref }
-      style={ { position: 'relative', display: 'inline-block', width: '100%', maxWidth: '320px' } }
+      style={ { position: 'relative', display: 'inline-block', width: '100%', maxWidth: '300px' } }
     >
       { /* Circular Slider */ }
       <div className={ `${styles.Slider} ${disabled && styles.Disabled} ${isHeating && styles.Heating}` }>
@@ -67,7 +70,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
           disabled={ disabled }
           onControlFinished={ handleControlFinished }
           size={ width ?? 280 }
-          trackWidth={ 7 }
+          trackWidth={ 12 }
           minValue={ MIN_TEMP_F }
           maxValue={ MAX_TEMP_F }
           startAngle={ 60 }
@@ -97,7 +100,7 @@ export default function Slider({ isOn, currentTargetTemp, refetch, currentTemper
               }
             },
           } }
-          handleSize={ 11 }
+          handleSize={ 14 }
         >
           <TemperatureLabel
             isOn={ isOn }
